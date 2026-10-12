@@ -1,0 +1,406 @@
+<title>Dia Glukose-Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: Messgeräte-Bericht. Kennzahlen oben, AGP als Herzstück, darunter Stundenmuster, Hinweise und Tagesverläufe. */
+:root {
+  --bg: #f3f5f6; --surface: #ffffff; --ink: #142026; --muted: #5b6b73; --line: #dbe2e5;
+  --accent: #0e6f7a; --accent-soft: #d6ecee;
+  --vlow: #8e1b1b; --low: #e0453a; --inr: #2e9b5f; --high: #e8b730; --vhigh: #e07a26;
+  --band: rgba(46,155,95,.10);
+  --f-display: "Instrument Serif", Georgia, serif;
+  --f-body: "Instrument Sans", system-ui, -apple-system, sans-serif;
+  --f-data: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1619; --surface: #162125; --ink: #e5eef0; --muted: #93a5ac; --line: #26363c;
+  --accent: #4fc0cb; --accent-soft: #17393e; --band: rgba(46,155,95,.16);
+  --vlow: #d04848; --low: #f0675d; --inr: #43b877; --high: #e8c14a; --vhigh: #ef9450; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1619; --surface: #162125; --ink: #e5eef0; --muted: #93a5ac; --line: #26363c;
+  --accent: #4fc0cb; --accent-soft: #17393e; --band: rgba(46,155,95,.16);
+  --vlow: #d04848; --low: #f0675d; --inr: #43b877; --high: #e8c14a; --vhigh: #ef9450; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 16px; padding-block: 24px 48px; display: grid; gap: 20px; }
+header { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; justify-content: space-between; }
+h1 { font-family: var(--f-display); font-weight: 400; font-size: 2.4rem; line-height: 1.05; margin: 0; text-wrap: balance; }
+h2 { font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+.sub { color: var(--muted); margin: 4px 0 0; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: none; color: var(--ink); font: 500 .85rem var(--f-body); padding: 6px 11px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+.btn { border: 1px solid var(--accent); background: var(--accent); color: var(--surface); font: 600 .88rem var(--f-body); padding: 7px 14px; border-radius: 8px; cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--accent); }
+button:focus-visible, .drop:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.drop { border: 1.5px dashed var(--line); border-radius: 12px; padding: 14px 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; background: var(--surface); }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop p { margin: 0; min-width: 0; flex: 1 1 320px; }
+.status { font-size: .85rem; color: var(--muted); }
+.pill { display: inline-block; font: 600 .72rem var(--f-body); letter-spacing: .04em; text-transform: uppercase; padding: 2px 8px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; min-width: 0; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 2px; }
+.kpi .lbl { font-size: .74rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; }
+.kpi .val { font: 500 1.7rem var(--f-data); font-variant-numeric: tabular-nums; }
+.kpi .val small { font-size: .8rem; color: var(--muted); margin-left: 3px; }
+.kpi .goal { font-size: .8rem; color: var(--muted); }
+.ok { color: var(--inr) } .warn { color: var(--vhigh) } .bad { color: var(--low) }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; background: currentColor; }
+.grid2 { display: grid; grid-template-columns: 1fr 2.4fr; gap: 20px; }
+@media (max-width: 820px) { .grid2 { grid-template-columns: 1fr; } }
+.tir { display: flex; gap: 16px; align-items: stretch; }
+.tirbar { width: 44px; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column-reverse; min-height: 260px; }
+.tirbar div { min-height: 2px; }
+.tirleg { display: grid; gap: 8px; align-content: center; font-size: .9rem; flex: 1; min-width: 0; }
+.tirleg .row { display: flex; justify-content: space-between; gap: 10px; }
+.tirleg .num { font-family: var(--f-data); font-variant-numeric: tabular-nums; }
+.tirleg .tgt { color: var(--muted); font-size: .78rem; }
+svg { display: block; width: 100%; height: auto; }
+svg text { fill: var(--muted); font: 11px var(--f-data); }
+.chartwrap { overflow-x: auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: .8rem; color: var(--muted); margin-top: 8px; }
+.sw { display: inline-block; width: 14px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+.insights { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.insights li { display: flex; gap: 10px; align-items: baseline; padding: 10px 12px; border-radius: 8px; background: var(--bg); }
+.insights li b { font-weight: 600; }
+.tag { flex: none; font: 600 .7rem var(--f-body); text-transform: uppercase; letter-spacing: .05em; padding: 2px 7px; border-radius: 4px; color: var(--surface); }
+.days { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.day { border: 1px solid var(--line); border-radius: 10px; padding: 10px 10px 6px; }
+.day .h { display: flex; justify-content: space-between; font-size: .82rem; margin-bottom: 4px; }
+.day .h span:last-child { font-family: var(--f-data); color: var(--muted); }
+.note { font-size: .82rem; color: var(--muted); max-width: 75ch; }
+details summary { cursor: pointer; font-weight: 600; }
+details ol { padding-left: 20px; margin: 8px 0 0; display: grid; gap: 4px; }
+@media (prefers-reduced-motion: no-preference) { .tirbar div { transition: flex-grow .4s ease; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Glukose-Dashboard</h1>
+      <p class="sub">Dexcom G7 · Ypsopump · CamAPS FX <span id="srcPill" class="pill">Beispieldaten</span></p>
+    </div>
+    <div class="controls">
+      <div class="seg" id="rangeSeg" role="group" aria-label="Zeitraum">
+        <button data-d="7">7 T</button><button data-d="14" aria-pressed="true">14 T</button><button data-d="30">30 T</button><button data-d="90">90 T</button>
+      </div>
+      <div class="seg" id="unitSeg" role="group" aria-label="Einheit">
+        <button data-u="mg" aria-pressed="true">mg/dL</button><button data-u="mmol">mmol/L</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="drop" id="drop" tabindex="0">
+    <p><b>Eigene Daten laden:</b> CSV-Export aus Dexcom Clarity oder Glooko (CamAPS FX) hierher ziehen oder auswählen. <span class="status" id="status">Die Datei wird nur in deinem Browser ausgewertet und nirgends hochgeladen.</span></p>
+    <div class="controls">
+      <input type="file" id="file" accept=".csv,.txt" multiple hidden>
+      <button class="btn" id="pick">CSV auswählen</button>
+      <button class="btn ghost" id="demo">Beispieldaten</button>
+    </div>
+  </div>
+
+  <section class="kpis" id="kpis"></section>
+
+  <section class="grid2">
+    <div class="panel">
+      <h2>Zeit in Bereichen</h2>
+      <div class="tir"><div class="tirbar" id="tirbar"></div><div class="tirleg" id="tirleg"></div></div>
+    </div>
+    <div class="panel">
+      <h2>AGP · Ambulantes Glukoseprofil</h2>
+      <div class="chartwrap"><svg id="agp" viewBox="0 0 760 300" role="img" aria-label="AGP-Diagramm"></svg></div>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--accent);opacity:.18"></i>5–95 %</span>
+        <span><i class="sw" style="background:var(--accent);opacity:.42"></i>25–75 %</span>
+        <span><i class="sw" style="background:var(--accent)"></i>Median</span>
+        <span><i class="sw" style="background:var(--band);border:1px solid var(--inr)"></i>Zielbereich</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Muster nach Tageszeit</h2>
+    <div class="chartwrap"><svg id="hourly" viewBox="0 0 760 200" role="img" aria-label="Anteil der Bereiche pro Stunde"></svg></div>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--low)"></i>unter Ziel</span>
+      <span><i class="sw" style="background:var(--inr)"></i>im Ziel</span>
+      <span><i class="sw" style="background:var(--high)"></i>über Ziel</span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Auffälligkeiten zum Besprechen</h2>
+    <ul class="insights" id="insights"></ul>
+    <p class="note" style="margin-top:12px">Diese Hinweise sind Beobachtungen, keine Therapieempfehlungen. Änderungen an Zielwert, Kohlenhydratfaktor oder Insulin bitte immer mit deinem Diabetesteam abstimmen.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Tagesverläufe</h2>
+    <div class="days" id="days"></div>
+  </section>
+
+  <section class="panel">
+    <details>
+      <summary>So exportierst du deine Daten</summary>
+      <ol>
+        <li><b>Dexcom Clarity:</b> clarity.dexcom.eu im Browser öffnen, oben rechts das Export-Symbol, Zeitraum wählen, CSV herunterladen.</li>
+        <li><b>CamAPS FX über Glooko:</b> In Glooko unter Profil bzw. Einstellungen „Daten exportieren“, ZIP entpacken und die Datei <code>cgm_data</code> hier laden.</li>
+        <li>Mehrere Dateien gleichzeitig sind möglich. Doppelte Messwerte werden zusammengeführt.</li>
+      </ol>
+    </details>
+    <p class="note">Kennzahlen nach internationalem Konsens (Battelino et al., Diabetes Care 2019). GMI = 3,31 + 0,02392 × Mittelwert (mg/dL).</p>
+  </section>
+</div>
+
+<script>
+(() => {
+const S = { data: [], days: 14, unit: 'mg', source: 'demo' };
+const $ = id => document.getElementById(id);
+const MMOL = 18.016;
+const fmt = v => S.unit === 'mg' ? Math.round(v) : (v / MMOL).toFixed(1).replace('.', ',');
+const uLbl = () => S.unit === 'mg' ? 'mg/dL' : 'mmol/L';
+const pct = v => (v * 100).toFixed(v < .1 && v > 0 ? 1 : 0).replace('.', ',');
+const svgNS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs, parent) => { const e = document.createElementNS(svgNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent && parent.appendChild(e); return e; };
+
+/* ---------- Beispieldaten ---------- */
+function demo() {
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const out = []; const end = new Date(); end.setMinutes(Math.floor(end.getMinutes() / 5) * 5, 0, 0);
+  const start = new Date(end - 90 * 864e5);
+  let meals = [], dip = null, drift = 0, day = -1;
+  for (let t = +start; t <= +end; t += 3e5) {
+    const d = new Date(t); const h = d.getHours() + d.getMinutes() / 60;
+    if (d.getDate() !== day) {
+      day = d.getDate();
+      meals = [[7 + rnd(), 40 + rnd() * 70], [12 + rnd() * 1.5, 45 + rnd() * 60], [18.5 + rnd() * 1.5, 55 + rnd() * 80]];
+      dip = rnd() < .18 ? [1.5 + rnd() * 3, 55 + rnd() * 30] : rnd() < .12 ? [15 + rnd() * 3, 60 + rnd() * 25] : null;
+    }
+    let g = 128 + 22 * Math.exp(-((h - 6.5) ** 2) / 2.2);
+    for (const [mt, a] of meals) { const x = h - mt; if (x > 0 && x < 4) g += a * (x / 1.1) * Math.exp(1 - x / 1.1); }
+    if (dip) { const x = h - dip[0]; if (x > -1 && x < 2) g -= dip[1] * Math.exp(-(x ** 2) / .35); }
+    drift = drift * .96 + (rnd() - .5) * 6; g += drift;
+    out.push({ t, g: Math.max(40, Math.min(400, Math.round(g))) });
+  }
+  return out;
+}
+
+/* ---------- CSV-Import ---------- */
+function splitLine(line, delim) {
+  const out = []; let cur = '', q = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { if (q && line[i + 1] === '"') { cur += '"'; i++; } else q = !q; }
+    else if (c === delim && !q) { out.push(cur); cur = ''; }
+    else cur += c;
+  }
+  out.push(cur); return out.map(s => s.trim());
+}
+function parseDate(s) {
+  let m = s.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{1,2}):(\d{2})/);
+  if (m) return new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5]).getTime();
+  m = s.match(/(\d{1,2})\.(\d{1,2})\.(\d{2,4})[ ,]+(\d{1,2}):(\d{2})/);
+  if (m) return new Date(+m[3] < 100 ? 2000 + +m[3] : +m[3], m[2] - 1, +m[1], +m[4], +m[5]).getTime();
+  m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})[ ,]+(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  if (m) { let h = +m[4]; if (m[6]) { h %= 12; if (/pm/i.test(m[6])) h += 12; }
+    return new Date(+m[3] < 100 ? 2000 + +m[3] : +m[3], m[1] - 1, +m[2], h, +m[5]).getTime(); }
+  return NaN;
+}
+function parseCSV(text) {
+  const lines = text.replace(/^﻿/, '').split(/\r?\n/);
+  const hi = lines.findIndex(l => /(gluc|gluk)/i.test(l) && /(time|zeit|datum|date)/i.test(l));
+  if (hi < 0) throw new Error('Keine Spalten für Zeit und Glukose gefunden.');
+  const delim = (lines[hi].match(/;/g) || []).length > (lines[hi].match(/,/g) || []).length ? ';' : (lines[hi].includes('\t') ? '\t' : ',');
+  const head = splitLine(lines[hi], delim);
+  const ti = head.findIndex(h => /(time|zeit|datum|date)/i.test(h));
+  const gi = head.findIndex(h => /(gluc|gluk)/i.test(h) && !/rate|änderung|change/i.test(h));
+  const ei = head.findIndex(h => /(event type|ereignistyp)/i.test(h));
+  const mmolHead = /mmol/i.test(head[gi]);
+  const out = [];
+  for (let i = hi + 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    const c = splitLine(lines[i], delim);
+    if (ei >= 0 && c[ei] && /calib|kalib/i.test(c[ei])) continue;
+    const raw = (c[gi] || '').trim(); if (!raw) continue;
+    let g = /^(low|niedrig|lo)$/i.test(raw) ? 40 : /^(high|hoch|hi)$/i.test(raw) ? 400 : parseFloat(raw.replace(',', '.'));
+    const t = parseDate(c[ti] || '');
+    if (!isFinite(g) || !isFinite(t)) continue;
+    out.push({ t, g, mm: mmolHead });
+  }
+  if (!out.length) throw new Error('Datei gelesen, aber keine Glukosewerte erkannt.');
+  const med = out.map(r => r.g).sort((a, b) => a - b)[out.length >> 1];
+  const isMmol = mmolHead || med < 30;
+  return out.map(r => ({ t: r.t, g: isMmol && r.g !== 40 && r.g !== 400 ? Math.round(r.g * MMOL) : r.g }));
+}
+async function loadFiles(files) {
+  try {
+    let all = [];
+    for (const f of files) all = all.concat(parseCSV(await f.text()));
+    const map = new Map(); all.forEach(r => map.set(Math.round(r.t / 6e4), r));
+    S.data = [...map.values()].sort((a, b) => a.t - b.t);
+    S.source = 'file';
+    $('status').textContent = `${S.data.length.toLocaleString('de-DE')} Messwerte aus ${files.length} Datei(en) geladen. Bleibt nur in diesem Browser.`;
+    render();
+  } catch (e) { $('status').textContent = 'Import fehlgeschlagen: ' + e.message + ' Prüfe, ob es der CSV-Export aus Clarity oder Glooko ist.'; }
+}
+
+/* ---------- Statistik ---------- */
+const q = (sorted, p) => { if (!sorted.length) return NaN; const i = (sorted.length - 1) * p, lo = Math.floor(i); return sorted[lo] + (sorted[Math.min(lo + 1, sorted.length - 1)] - sorted[lo]) * (i - lo); };
+function stats(rows) {
+  const v = rows.map(r => r.g), n = v.length;
+  const mean = v.reduce((a, b) => a + b, 0) / n;
+  const sd = Math.sqrt(v.reduce((a, b) => a + (b - mean) ** 2, 0) / n);
+  const share = f => v.filter(f).length / n;
+  return { n, mean, sd, cv: sd / mean, gmi: 3.31 + .02392 * mean,
+    vlow: share(x => x < 54), low: share(x => x >= 54 && x < 70), inr: share(x => x >= 70 && x <= 180),
+    high: share(x => x > 180 && x <= 250), vhigh: share(x => x > 250) };
+}
+function hypoEvents(rows) {
+  const ev = []; let s = null;
+  rows.forEach((r, i) => {
+    const prev = rows[i - 1];
+    if (prev && r.t - prev.t > 18e5 && s) { s = null; }
+    if (r.g < 70) { if (!s) s = { t0: r.t, min: r.g }; s.t1 = r.t; s.min = Math.min(s.min, r.g); }
+    else if (s) { if (s.t1 - s.t0 >= 9e5) ev.push(s); s = null; }
+  });
+  if (s && s.t1 - s.t0 >= 9e5) ev.push(s);
+  return ev;
+}
+
+/* ---------- Rendern ---------- */
+function render() {
+  if (!S.data.length) return;
+  $('srcPill').textContent = S.source === 'demo' ? 'Beispieldaten' : 'Eigene Daten';
+  const last = S.data[S.data.length - 1].t, from = last - S.days * 864e5;
+  const rows = S.data.filter(r => r.t > from);
+  if (rows.length < 12) return;
+  const st = stats(rows);
+  const spanDays = Math.max(1, (last - Math.max(from, rows[0].t)) / 864e5);
+  const coverage = Math.min(1, rows.length / (spanDays * 288));
+  const hypos = hypoEvents(rows);
+
+  const k = [
+    ['Zeit im Ziel', pct(st.inr), '%', 'Ziel > 70 %', st.inr >= .7 ? 'ok' : st.inr >= .5 ? 'warn' : 'bad'],
+    ['Mittelwert', fmt(st.mean), uLbl(), 'Ziel < ' + fmt(154), st.mean < 154 ? 'ok' : st.mean < 183 ? 'warn' : 'bad'],
+    ['GMI', st.gmi.toFixed(1).replace('.', ','), '%', 'geschätzter HbA1c, Ziel < 7 %', st.gmi < 7 ? 'ok' : st.gmi < 8 ? 'warn' : 'bad'],
+    ['Variabilität (CV)', pct(st.cv), '%', 'Ziel ≤ 36 %', st.cv <= .36 ? 'ok' : 'bad'],
+    ['Hypos ≥ 15 min', hypos.length, '', (hypos.length / spanDays * 7).toFixed(1).replace('.', ',') + ' pro Woche', hypos.length / spanDays * 7 <= 1 ? 'ok' : hypos.length / spanDays * 7 <= 3 ? 'warn' : 'bad'],
+    ['Sensorzeit', pct(coverage), '%', 'Ziel > 70 %', coverage >= .7 ? 'ok' : 'warn'],
+  ];
+  $('kpis').innerHTML = k.map(([l, v, u, g, c]) => `<div class="kpi"><span class="lbl">${l}</span><span class="val">${v}<small>${u}</small></span><span class="goal"><i class="dot ${c}"></i>${g}</span></div>`).join('');
+
+  const bands = [
+    ['vhigh', 'Sehr hoch', '> ' + fmt(250), '< 5 %'], ['high', 'Hoch', fmt(181) + '–' + fmt(250), ''],
+    ['inr', 'Im Ziel', fmt(70) + '–' + fmt(180), '> 70 %'], ['low', 'Niedrig', fmt(54) + '–' + fmt(69), '< 4 % gesamt'],
+    ['vlow', 'Sehr niedrig', '< ' + fmt(54), '< 1 %']];
+  $('tirbar').innerHTML = bands.slice().reverse().map(([key]) => `<div style="flex-grow:${st[key]};background:var(--${key})"></div>`).join('');
+  $('tirleg').innerHTML = bands.map(([key, n, r, t]) => `<div class="row"><span><i class="dot" style="color:var(--${key})"></i>${n} <span class="tgt">${r}</span></span><span><span class="num">${pct(st[key])} %</span> <span class="tgt">${t}</span></span></div>`).join('')
+    + `<div class="tgt">${rows.length.toLocaleString('de-DE')} Werte · ${uLbl()}</div>`;
+
+  drawAGP(rows); drawHourly(rows); insights(rows, st, hypos, coverage); drawDays(rows);
+}
+
+function yScale(top, h, max) { return g => top + h - (Math.min(g, max) / max) * h; }
+function drawAGP(rows) {
+  const svg = $('agp'); svg.innerHTML = '';
+  const L = 44, R = 750, T = 10, H = 260, max = 350, y = yScale(T, H, max), x = m => L + (m / 1440) * (R - L);
+  const bins = Array.from({ length: 96 }, () => []);
+  rows.forEach(r => { const d = new Date(r.t); bins[Math.floor((d.getHours() * 60 + d.getMinutes()) / 15)].push(r.g); });
+  const P = [.05, .25, .5, .75, .95];
+  let qs = bins.map(b => { const s = b.slice().sort((a, c) => a - c); return P.map(p => q(s, p)); });
+  qs = qs.map((_, i) => P.map((__, j) => { const vals = [-2, -1, 0, 1, 2].map(o => qs[(i + o + 96) % 96][j]).filter(isFinite); return vals.reduce((a, b) => a + b, 0) / vals.length; }));
+  el('rect', { x: L, y: y(180), width: R - L, height: y(70) - y(180), fill: 'var(--band)' }, svg);
+  [54, 70, 180, 250].forEach(g => {
+    el('line', { x1: L, x2: R, y1: y(g), y2: y(g), stroke: g === 70 || g === 180 ? 'var(--inr)' : 'var(--line)', 'stroke-width': 1, 'stroke-dasharray': g === 70 || g === 180 ? '' : '3 3' }, svg);
+    el('text', { x: L - 6, y: y(g) + 4, 'text-anchor': 'end' }, svg).textContent = fmt(g);
+  });
+  for (let h = 0; h <= 24; h += 3) {
+    el('line', { x1: x(h * 60), x2: x(h * 60), y1: T, y2: T + H, stroke: 'var(--line)', 'stroke-width': .6 }, svg);
+    el('text', { x: x(h * 60), y: T + H + 18, 'text-anchor': 'middle' }, svg).textContent = String(h % 24).padStart(2, '0') + ':00';
+  }
+  const pts = j => qs.map((v, i) => [x(i * 15 + 7.5), y(v[j])]);
+  const area = (a, b) => { const A = pts(a), B = pts(b).reverse(); return 'M' + A.concat(B).map(p => p.map(n => n.toFixed(1)).join(',')).join('L') + 'Z'; };
+  el('path', { d: area(0, 4), fill: 'var(--accent)', 'fill-opacity': .18 }, svg);
+  el('path', { d: area(1, 3), fill: 'var(--accent)', 'fill-opacity': .38 }, svg);
+  el('path', { d: 'M' + pts(2).map(p => p.map(n => n.toFixed(1)).join(',')).join('L'), fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2.4, 'stroke-linejoin': 'round' }, svg);
+}
+
+function hourBuckets(rows) {
+  const b = Array.from({ length: 24 }, () => ({ lo: 0, in: 0, hi: 0, n: 0, sum: 0 }));
+  rows.forEach(r => { const o = b[new Date(r.t).getHours()]; o.n++; o.sum += r.g; r.g < 70 ? o.lo++ : r.g > 180 ? o.hi++ : o.in++; });
+  return b;
+}
+function drawHourly(rows) {
+  const svg = $('hourly'); svg.innerHTML = '';
+  const L = 44, R = 750, T = 8, H = 160, bw = (R - L) / 24, b = hourBuckets(rows);
+  [0, .5, 1].forEach(p => { el('line', { x1: L, x2: R, y1: T + H * (1 - p), y2: T + H * (1 - p), stroke: 'var(--line)' }, svg);
+    el('text', { x: L - 6, y: T + H * (1 - p) + 4, 'text-anchor': 'end' }, svg).textContent = p * 100 + ' %'; });
+  b.forEach((o, i) => {
+    if (!o.n) return;
+    let y0 = T + H;
+    [['lo', 'var(--low)'], ['in', 'var(--inr)'], ['hi', 'var(--high)']].forEach(([key, c]) => {
+      const h = (o[key] / o.n) * H; y0 -= h;
+      el('rect', { x: L + i * bw + 2, y: y0, width: bw - 4, height: Math.max(0, h), fill: c }, svg);
+    });
+    if (i % 3 === 0) el('text', { x: L + i * bw + bw / 2, y: T + H + 18, 'text-anchor': 'middle' }, svg).textContent = String(i).padStart(2, '0');
+  });
+}
+
+function insights(rows, st, hypos, coverage) {
+  const b = hourBuckets(rows), list = [];
+  const tagC = { Hypo: 'var(--low)', Hoch: 'var(--vhigh)', Gut: 'var(--inr)', Info: 'var(--accent)' };
+  const range = (hs) => { hs.sort((a, c) => a - c); return String(hs[0]).padStart(2, '0') + '–' + String((hs[hs.length - 1] + 1) % 24).padStart(2, '0') + ' Uhr'; };
+  const loH = b.map((o, h) => [h, o.n ? o.lo / o.n : 0]).filter(([, p]) => p >= .06).map(([h]) => h);
+  if (loH.length) list.push(['Hypo', `Gehäuft niedrige Werte zwischen <b>${range(loH)}</b>. ${loH.every(h => h < 7) ? 'Nächtliche Tiefs lassen sich gut mit dem Team besprechen, etwa das persönliche Glukoseziel in CamAPS FX oder den Basalbedarf.' : 'Prüfe, ob Sport, Korrekturen oder Mahlzeitenbolus davor eine Rolle spielen.'}`]);
+  const nightHypo = hypos.filter(e => new Date(e.t0).getHours() < 6).length;
+  if (nightHypo >= 2) list.push(['Hypo', `<b>${nightHypo} nächtliche Hypos</b> (00–06 Uhr, mindestens 15 Minuten unter ${fmt(70)} ${uLbl()}) im Zeitraum.`]);
+  const hiH = b.map((o, h) => [h, o.n ? o.hi / o.n : 0]).filter(([, p]) => p >= .4).map(([h]) => h);
+  if (hiH.length) {
+    const groups = []; hiH.forEach(h => { const g = groups[groups.length - 1]; g && g[g.length - 1] === h - 1 ? g.push(h) : groups.push([h]); });
+    groups.forEach(g => list.push(['Hoch', `In <b>${range(g)}</b> liegen über 40 % der Werte über ${fmt(180)} ${uLbl()}. ${g[0] >= 6 && g[0] <= 9 ? 'Typisch nach dem Frühstück: Spritz-Ess-Abstand und Kohlenhydratfaktor am Morgen sind gute Gesprächsthemen.' : g[0] >= 11 && g[0] <= 15 ? 'Fällt auf das Mittagessen. Das Kohlenhydrate-Schätzen lohnt einen zweiten Blick.' : g[0] >= 17 ? 'Fällt auf den Abend. Fettreiche Mahlzeiten wirken in CamAPS oft verzögert, der Boost-Modus kann helfen.' : ''}`]));
+  }
+  const dawn = (b[7].n && b[3].n) ? b[7].sum / b[7].n - b[3].sum / b[3].n : 0;
+  if (dawn > 25) list.push(['Info', `Morgendlicher Anstieg: Zwischen 03 und 07 Uhr steigt der Mittelwert um <b>${fmt(dawn)} ${uLbl()}</b>. Das kann ein Dawn-Phänomen sein.`]);
+  if (st.cv > .36) list.push(['Hoch', `Die Variabilität liegt bei <b>${pct(st.cv)} %</b> (Ziel ≤ 36 %). Starke Schwankungen erhöhen das Hypo-Risiko.`]);
+  if (coverage < .7) list.push(['Info', `Nur <b>${pct(coverage)} %</b> Sensorzeit. Für aussagekräftige Kennzahlen sollten es über 70 % der Zeit sein.`]);
+  if (st.inr >= .7 && st.vlow + st.low < .04) list.push(['Gut', `<b>${pct(st.inr)} % im Zielbereich</b> bei wenig Unterzuckerung. Das erfüllt die internationalen Ziele.`]);
+  if (!list.length) list.push(['Gut', 'Keine auffälligen Muster im gewählten Zeitraum.']);
+  $('insights').innerHTML = list.map(([t, s]) => `<li><span class="tag" style="background:${tagC[t]}">${t}</span><span>${s}</span></li>`).join('');
+}
+
+function drawDays(rows) {
+  const box = $('days'); box.innerHTML = '';
+  const byDay = new Map();
+  rows.forEach(r => { const d = new Date(r.t); const key = d.toDateString(); if (!byDay.has(key)) byDay.set(key, []); byDay.get(key).push(r); });
+  [...byDay.entries()].reverse().slice(0, 14).forEach(([key, rs]) => {
+    const st = stats(rs), d = new Date(rs[0].t);
+    const div = document.createElement('div'); div.className = 'day';
+    div.innerHTML = `<div class="h"><span>${d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}</span><span>${pct(st.inr)} % im Ziel</span></div>`;
+    const svg = el('svg', { viewBox: '0 0 240 80', role: 'img', 'aria-label': 'Tagesverlauf' }, div);
+    const y = yScale(4, 72, 400), x = r => { const t = new Date(r.t); return ((t.getHours() * 60 + t.getMinutes()) / 1440) * 240; };
+    el('rect', { x: 0, y: y(180), width: 240, height: y(70) - y(180), fill: 'var(--band)' }, svg);
+    let d2 = ''; rs.forEach((r, i) => { d2 += (i && r.t - rs[i - 1].t < 9e5 ? 'L' : 'M') + x(r).toFixed(1) + ',' + y(r.g).toFixed(1); });
+    el('path', { d: d2, fill: 'none', stroke: 'var(--ink)', 'stroke-width': 1.2, 'stroke-linejoin': 'round' }, svg);
+    rs.filter(r => r.g < 70).forEach(r => el('circle', { cx: x(r), cy: y(r.g), r: 1.6, fill: 'var(--low)' }, svg));
+    box.appendChild(div);
+  });
+}
+
+/* ---------- Bedienung ---------- */
+const press = (seg, btn) => seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === btn));
+$('rangeSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.days = +b.dataset.d; press($('rangeSeg'), b); render(); });
+$('unitSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.unit = b.dataset.u; press($('unitSeg'), b); try { localStorage.setItem('dia-unit', S.unit); } catch (_) {} render(); });
+$('pick').addEventListener('click', () => $('file').click());
+$('file').addEventListener('change', e => e.target.files.length && loadFiles([...e.target.files]));
+$('demo').addEventListener('click', () => { S.data = demo(); S.source = 'demo'; $('status').textContent = 'Beispieldaten geladen. Das sind keine echten Werte.'; render(); });
+const drop = $('drop');
+['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => e.dataTransfer.files.length && loadFiles([...e.dataTransfer.files]));
+
+try { const u = localStorage.getItem('dia-unit'); if (u === 'mmol') press($('unitSeg'), $('unitSeg').children[1]), S.unit = u; } catch (_) {}
+S.data = demo(); render();
+})();
+</script>
