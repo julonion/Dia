@@ -93,9 +93,9 @@ details ol { padding-left: 20px; margin: 8px 0 0; display: grid; gap: 4px; }
   </header>
 
   <div class="drop" id="drop" tabindex="0">
-    <p><b>Eigene Daten laden:</b> CSV-Export aus Dexcom Clarity oder Glooko (CamAPS FX) hierher ziehen oder auswählen. <span class="status" id="status">Die Datei wird nur in deinem Browser ausgewertet und nirgends hochgeladen.</span></p>
+    <p><b>Eigene Daten laden:</b> CSV-Export aus Dexcom Clarity, Glooko oder den CamAPS-FX-Export (.txt) hierher ziehen oder auswählen. <span class="status" id="status">Die Datei wird nur in deinem Browser ausgewertet und nirgends hochgeladen.</span></p>
     <div class="controls">
-      <input type="file" id="file" accept=".csv,.txt" multiple hidden>
+      <input type="file" id="file" accept=".csv,.txt,text/plain" multiple hidden>
       <button class="btn" id="pick">CSV auswählen</button>
       <button class="btn ghost" id="demo">Beispieldaten</button>
     </div>
@@ -210,6 +210,16 @@ function parseDate(s) {
 }
 function parseCSV(text) {
   const lines = text.replace(/^﻿/, '').split(/\r?\n/);
+  const cam = lines.findIndex(l => /^Glucose_concentration \*{5}/.test(l));
+  if (cam >= 0) { /* CamAPS-FX-Export: Abschnitt Glucose_concentration, dd/mm/yyyy, mmol/L */
+    const out = [];
+    for (let i = cam + 1; i < lines.length && !/\*{5}/.test(lines[i]); i++) {
+      const m = lines[i].match(/^(\d\d)\/(\d\d)\/(\d{4}) (\d\d):(\d\d)\s+([\d.]+)/);
+      if (m) out.push({ t: new Date(+m[3], m[2] - 1, +m[1], +m[4], +m[5]).getTime(), g: Math.round(parseFloat(m[6]) * MMOL) });
+    }
+    if (!out.length) throw new Error('CamAPS-Export erkannt, aber keine Glukosewerte gefunden.');
+    return out;
+  }
   const hi = lines.findIndex(l => /(gluc|gluk)/i.test(l) && /(time|zeit|datum|date)/i.test(l));
   if (hi < 0) throw new Error('Keine Spalten für Zeit und Glukose gefunden.');
   const delim = (lines[hi].match(/;/g) || []).length > (lines[hi].match(/,/g) || []).length ? ';' : (lines[hi].includes('\t') ? '\t' : ',');
